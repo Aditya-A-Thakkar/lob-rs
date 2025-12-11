@@ -1,5 +1,7 @@
 use std::collections::{BTreeMap, VecDeque};
 use ordered_float::OrderedFloat;
+use rand::Rng;
+use std::time::Instant;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 enum Side {
@@ -9,7 +11,7 @@ enum Side {
 
 #[derive(Debug, Clone)]
 struct Order {
-    id: u64,
+    _id: u64,
     price: f64,
     quantity: u64,
     side: Side,
@@ -51,7 +53,7 @@ impl OrderBook {
                 // Execute the trade
                 let best_ask_order = ask_queue.front_mut().unwrap();
                 let trade_qty = order.quantity.min(best_ask_order.quantity);
-                println!("Trade! Price: {}, Qty: {}", best_ask_price, trade_qty);
+                // println!("Trade! Price: {}, Qty: {}", best_ask_price, trade_qty);
 
                 // Update the quantities as per the trade quantity
                 order.quantity -= trade_qty;
@@ -76,7 +78,7 @@ impl OrderBook {
             self.bids.entry(OrderedFloat(order.price))
                 .or_default()
                 .push_back(order.clone());
-            println!("Buy Order rested: {} @ {}", order.quantity, order.price);
+            // println!("Buy Order rested: {} @ {}", order.quantity, order.price);
         }
     }
 
@@ -96,7 +98,7 @@ impl OrderBook {
                 // Execute the trade
                 let best_bid_order = bid_queue.front_mut().unwrap();
                 let trade_qty = order.quantity.min(best_bid_order.quantity);
-                println!("Trade Executed! Price: {}, Qty: {}", best_bid_price, trade_qty);
+                // println!("Trade Executed! Price: {}, Qty: {}", best_bid_price, trade_qty);
 
                 // Update the quantities as per the trade quantity
                 order.quantity -= trade_qty;
@@ -121,7 +123,7 @@ impl OrderBook {
             self.asks.entry(OrderedFloat(order.price))
                 .or_default()
                 .push_back(order.clone());
-            println!("Sell Order rested: {} @ {}", order.quantity, order.price);
+            // println!("Sell Order rested: {} @ {}", order.quantity, order.price);
         }
     }
 }
@@ -130,12 +132,54 @@ fn main() {
     let mut book = OrderBook::new();
 
     // Selling 100 shares at $150
-    let sell_order = Order { id: 1, price: 150.0, quantity: 100, side: Side::Sell };
+    let sell_order = Order { _id: 1, price: 150.0, quantity: 100, side: Side::Sell };
     book.add_order(sell_order);
     println!("Ask placed. Book state updated.");
 
     // Buying 50 shares at $150
-    let buy_order = Order { id: 2, price: 150.0, quantity: 50, side: Side::Buy };
+    let buy_order = Order { _id: 2, price: 150.0, quantity: 50, side: Side::Buy };
     println!("Placing Buy Order...");
     book.add_order(buy_order);
+
+    let mut rng = rand::rng();
+    let total_orders = 1_000_000;
+
+    // Generate random orders
+    println!("Generating random data...");
+    let mut orders = Vec::with_capacity(total_orders);
+    for i in 0..total_orders {
+        let price = rng.random_range(90.0..110.0);
+        let quantity = rng.random_range(1..100);
+        let side = if rng.random_bool(0.5) { Side::Buy } else { Side::Sell };
+
+        orders.push(Order {
+            _id: i as u64,
+            price,
+            quantity,
+            side,
+        });
+    }
+    println!("Generated orders...\n");
+
+    // Simulating the market
+    println!("Starting the simulation...");
+    let start = Instant::now();
+    for order in orders {
+        book.add_order(order);
+    }
+    println!("End of simulation....\n");
+
+    // Benchmarks
+    let duration = start.elapsed();
+    let seconds = duration.as_secs_f64();
+    let throughput = total_orders as f64 / seconds;
+    let latency_per_order = (seconds * 1_000_000_000.0) / total_orders as f64;
+    println!("Simulation finished in: {:?}", duration);
+    println!("Throughput: {:.2} seconds", throughput);
+    println!("Latency per order: {:.2} nanoseconds", latency_per_order);
+
+    // OUTPUT:-
+    // Simulation finished in: 90.205291ms
+    // Throughput: 11085824.22 seconds
+    // Latency per order: 90.21 nanoseconds
 }
