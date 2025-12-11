@@ -37,29 +37,34 @@ impl OrderBook {
 
     fn match_bid(&mut self, order: &mut Order) {
         while order.quantity > 0 {
-            // Peek at cheapest seller
-            if let Some((best_ask_price, ask_queue)) = self.asks.first_key_value() {
+            // Use first_entry() because Bids are sorted Low -> High by default.
+            // The "Best" ask is the LOWEST price, which is at the start of the map.
+            if let Some(mut entry) = self.asks.first_entry() {
+                let best_ask_price = *entry.key();
+                let ask_queue = entry.get_mut();
+
                 // If sellers are too expensive, break
                 if best_ask_price.into_inner() > order.price {
                     break;
                 }
 
-                let mut best_ask = ask_queue[0].quantity;
-                let trade_qty = order.quantity.min(best_ask);
-
+                // Execute the trade
+                let best_ask_order = ask_queue.front_mut().unwrap();
+                let trade_qty = order.quantity.min(best_ask_order.quantity);
                 println!("Trade! Price: {}, Qty: {}", best_ask_price, trade_qty);
 
+                // Update the quantities as per the trade quantity
                 order.quantity -= trade_qty;
-                best_ask -= trade_qty;
+                best_ask_order.quantity -= trade_qty;
 
-                if best_ask == 0 {
-                    self.asks.get_mut(best_ask_price).pop_front();
+                // Remove completed orders from queue
+                if best_ask_order.quantity == 0 {
+                    ask_queue.pop_front();
                 }
 
                 // Cleanup empty price levels
                 if ask_queue.is_empty() {
-                    let price_copy = *best_ask_price;
-                    self.asks.remove(&price_copy);
+                    entry.remove();
                 }
             } else {
                 break; // No sellers
@@ -71,16 +76,52 @@ impl OrderBook {
             self.bids.entry(OrderedFloat(order.price))
                 .or_default()
                 .push_back(order.clone());
+            println!("Buy Order rested: {} @ {}", order.quantity, order.price);
         }
     }
 
     fn match_ask(&mut self, order: &mut Order) {
-        // TODO: complete this function
-        // Placeholder for now:
+        while order.quantity > 0 {
+            // Use last_entry() because Bids are sorted Low -> High by default.
+            // The "Best" bid is the HIGHEST price, which is at the end of the map.
+            if let Some(mut entry) = self.bids.last_entry() {
+                let best_bid_price = *entry.key();
+                let bid_queue = entry.get_mut();
+
+                // If buyers are too cheap, break
+                if best_bid_price.into_inner() < order.price {
+                    break;
+                }
+
+                // Execute the trade
+                let best_bid_order = bid_queue.front_mut().unwrap();
+                let trade_qty = order.quantity.min(best_bid_order.quantity);
+                println!("Trade Executed! Price: {}, Qty: {}", best_bid_price, trade_qty);
+
+                // Update the quantities as per the trade quantity
+                order.quantity -= trade_qty;
+                best_bid_order.quantity -= trade_qty;
+
+                // Remove completed orders from queue
+                if best_bid_order.quantity == 0 {
+                    bid_queue.pop_front();
+                }
+
+                // Cleanup empty price levels
+                if bid_queue.is_empty() {
+                    entry.remove();
+                }
+            } else {
+                break; // No buyers
+            }
+        }
+
+        // If not fully filled, rest on the book
         if order.quantity > 0 {
             self.asks.entry(OrderedFloat(order.price))
                 .or_default()
                 .push_back(order.clone());
+            println!("Sell Order rested: {} @ {}", order.quantity, order.price);
         }
     }
 }
